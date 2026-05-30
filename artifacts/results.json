@@ -1,0 +1,137 @@
+{
+  "dataset": {
+    "artists": 17632,
+    "friend_edges_undirected": 12717,
+    "listening_records": 92834,
+    "niche_artist_count": 10679,
+    "test_edges": 1908,
+    "train_edges": 8901,
+    "users": 1892,
+    "validation_edges": 1908
+  },
+  "filtered_ground_truth": {
+    "negative_threshold": 0.02,
+    "negatives": 8652,
+    "positive_threshold": 0.1,
+    "positives": 8652,
+    "rows": 17304
+  },
+  "friend_random_similarity": {
+    "friend_mean_similarity": 0.1998964903086425,
+    "friend_pair_count": 12717.0,
+    "friend_to_random_similarity_ratio": 4.262310480572377,
+    "random_nonfriend_mean_similarity": 0.046898622524044475,
+    "random_nonfriend_pair_count": 50000.0
+  },
+  "hybrid_validation_metrics": {
+    "auc": 0.8348746603163323,
+    "evaluated_targets": 1168.0,
+    "map@10": 0.25654409928767297,
+    "map@5": 0.23490320585996957,
+    "ndcg@10": 0.36024055802473604,
+    "ndcg@5": 0.305595792715176,
+    "precision@10": 0.1428082191780822,
+    "precision@5": 0.17842465753424655,
+    "recall@10": 0.4922438453683152,
+    "recall@5": 0.32837448195059177
+  },
+  "hybrid_weights": {
+    "artist": 0.55,
+    "discovery": 0.1,
+    "niche": 0.2,
+    "tag": 0.15
+  },
+  "learned_ranker_training": {
+    "min_artists": 10.0,
+    "min_tags": 3.0,
+    "reliable_users": 1765.0,
+    "training_negative_pairs": 159480.0,
+    "training_positive_pairs": 15948.0
+  },
+  "test_metrics": {
+    "artist_cosine": {
+      "auc": 0.8208858559454257,
+      "evaluated_targets": 1126.0,
+      "map@10": 0.2701120884344791,
+      "map@5": 0.25566854154331947,
+      "ndcg@10": 0.37358439193805165,
+      "ndcg@5": 0.33170959829834534,
+      "precision@10": 0.14733570159857903,
+      "precision@5": 0.19609236234458258,
+      "recall@10": 0.48236431191993695,
+      "recall@5": 0.35097111400941
+    },
+    "popularity_degree": {
+      "auc": 0.7849972805444776,
+      "evaluated_targets": 1126.0,
+      "map@10": 0.15727875689121776,
+      "map@5": 0.14157341622261693,
+      "ndcg@10": 0.24477271358170785,
+      "ndcg@5": 0.20275822913337335,
+      "precision@10": 0.12184724689165186,
+      "precision@5": 0.14316163410301955,
+      "recall@10": 0.3289506917561919,
+      "recall@5": 0.20294446098961078
+    },
+    "proposal_hybrid": {
+      "auc": 0.8319817720842597,
+      "evaluated_targets": 1126.0,
+      "map@10": 0.26044086536331523,
+      "map@5": 0.24454213538582986,
+      "ndcg@10": 0.36557070410215653,
+      "ndcg@5": 0.3213231375364736,
+      "precision@10": 0.1467140319715808,
+      "precision@5": 0.1932504440497336,
+      "recall@10": 0.4775566688510586,
+      "recall@5": 0.33826808780727186
+    },
+    "random": {
+      "auc": 0.4925478656754211,
+      "evaluated_targets": 1126.0,
+      "map@10": 0.026025357992022543,
+      "map@5": 0.022577708703374777,
+      "ndcg@10": 0.0543492819004588,
+      "ndcg@5": 0.038930338421438025,
+      "precision@10": 0.02975133214920071,
+      "precision@5": 0.028596802841918297,
+      "recall@10": 0.08632279537582122,
+      "recall@5": 0.045333641408145234
+    },
+    "svd_embedding": {
+      "auc": 0.8339369314394659,
+      "evaluated_targets": 1126.0,
+      "map@10": 0.24142306821583973,
+      "map@5": 0.22145771659759225,
+      "ndcg@10": 0.34913099392794494,
+      "ndcg@5": 0.29798688940113877,
+      "precision@10": 0.14626998223801066,
+      "precision@5": 0.18579040852575487,
+      "recall@10": 0.47871748627519745,
+      "recall@5": 0.3237841649208763
+    },
+    "tag_cosine": {
+      "auc": 0.6317039605605639,
+      "evaluated_targets": 1126.0,
+      "map@10": 0.21014231435946523,
+      "map@5": 0.1932109729623051,
+      "ndcg@10": 0.2871718467542128,
+      "ndcg@5": 0.2440327540933758,
+      "precision@10": 0.119449378330373,
+      "precision@5": 0.14653641207815277,
+      "recall@10": 0.3887260937781756,
+      "recall@5": 0.26469383956171694
+    },
+    "teammate_learned_ranker": {
+      "auc": 0.8806732950631351,
+      "evaluated_targets": 1126.0,
+      "map@10": 0.32885511358678066,
+      "map@5": 0.30706853167554765,
+      "ndcg@10": 0.44518209211561643,
+      "ndcg@5": 0.3923112120712648,
+      "precision@10": 0.1794849023090586,
+      "precision@5": 0.236056838365897,
+      "recall@10": 0.5701132628496457,
+      "recall@5": 0.4049506412551364
+    }
+  }
+}
