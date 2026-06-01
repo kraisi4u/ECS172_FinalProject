@@ -3,6 +3,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
+from src.data_loader import filter_tags_by_proposal_rules
 from src.music_match import (
     build_undirected_edges,
     compute_niche_overlap,
@@ -105,6 +106,88 @@ class MusicMatchTests(unittest.TestCase):
         self.assertEqual(set(pairs["label"]), {0, 1})
         self.assertTrue((pairs[pairs["label"] == 1]["taste_similarity"] >= 0.75).all())
         self.assertTrue((pairs[pairs["label"] == 0]["taste_similarity"] <= 0.02).all())
+
+    def test_filter_tags_by_proposal_rules_filters_noisy_tags_and_keeps_ambiguous_useful_tags(self):
+        user_tags = pd.DataFrame(
+            [
+                {"userID": 1, "artistID": 10, "tagID": 1},
+                {"userID": 2, "artistID": 11, "tagID": 1},
+                {"userID": 3, "artistID": 12, "tagID": 1},
+                {"userID": 4, "artistID": 13, "tagID": 1},
+                {"userID": 5, "artistID": 14, "tagID": 1},
+                {"userID": 1, "artistID": 15, "tagID": 1},
+                {"userID": 2, "artistID": 16, "tagID": 1},
+                {"userID": 3, "artistID": 17, "tagID": 1},
+                {"userID": 4, "artistID": 18, "tagID": 1},
+                {"userID": 5, "artistID": 19, "tagID": 1},
+                {"userID": 1, "artistID": 20, "tagID": 1},
+                {"userID": 2, "artistID": 21, "tagID": 1},
+                {"userID": 3, "artistID": 22, "tagID": 1},
+                {"userID": 4, "artistID": 23, "tagID": 1},
+                {"userID": 5, "artistID": 24, "tagID": 1},
+                {"userID": 1, "artistID": 25, "tagID": 1},
+                {"userID": 2, "artistID": 26, "tagID": 1},
+                {"userID": 3, "artistID": 27, "tagID": 1},
+                {"userID": 4, "artistID": 28, "tagID": 1},
+                {"userID": 5, "artistID": 29, "tagID": 1},
+                {"userID": 1, "artistID": 30, "tagID": 2},
+                {"userID": 2, "artistID": 31, "tagID": 2},
+                {"userID": 3, "artistID": 32, "tagID": 2},
+                {"userID": 4, "artistID": 33, "tagID": 2},
+                {"userID": 5, "artistID": 34, "tagID": 2},
+                {"userID": 1, "artistID": 35, "tagID": 2},
+                {"userID": 2, "artistID": 36, "tagID": 2},
+                {"userID": 3, "artistID": 37, "tagID": 2},
+                {"userID": 4, "artistID": 38, "tagID": 2},
+                {"userID": 5, "artistID": 39, "tagID": 2},
+                {"userID": 1, "artistID": 40, "tagID": 2},
+                {"userID": 2, "artistID": 41, "tagID": 2},
+                {"userID": 3, "artistID": 42, "tagID": 2},
+                {"userID": 4, "artistID": 43, "tagID": 2},
+                {"userID": 5, "artistID": 44, "tagID": 2},
+                {"userID": 1, "artistID": 45, "tagID": 2},
+                {"userID": 2, "artistID": 46, "tagID": 2},
+                {"userID": 3, "artistID": 47, "tagID": 2},
+                {"userID": 4, "artistID": 48, "tagID": 2},
+                {"userID": 5, "artistID": 49, "tagID": 2},
+                {"userID": 1, "artistID": 50, "tagID": 3},
+                {"userID": 2, "artistID": 51, "tagID": 3},
+                {"userID": 3, "artistID": 52, "tagID": 3},
+                {"userID": 4, "artistID": 53, "tagID": 3},
+                {"userID": 5, "artistID": 54, "tagID": 3},
+                {"userID": 1, "artistID": 55, "tagID": 3},
+                {"userID": 2, "artistID": 56, "tagID": 3},
+                {"userID": 3, "artistID": 57, "tagID": 3},
+                {"userID": 4, "artistID": 58, "tagID": 3},
+                {"userID": 5, "artistID": 59, "tagID": 3},
+                {"userID": 1, "artistID": 60, "tagID": 3},
+                {"userID": 2, "artistID": 61, "tagID": 3},
+                {"userID": 3, "artistID": 62, "tagID": 3},
+                {"userID": 4, "artistID": 63, "tagID": 3},
+                {"userID": 5, "artistID": 64, "tagID": 3},
+                {"userID": 1, "artistID": 65, "tagID": 3},
+                {"userID": 2, "artistID": 66, "tagID": 3},
+                {"userID": 3, "artistID": 67, "tagID": 3},
+                {"userID": 4, "artistID": 68, "tagID": 3},
+                {"userID": 5, "artistID": 69, "tagID": 3},
+                {"userID": 1, "artistID": 70, "tagID": 4},
+                {"userID": 2, "artistID": 71, "tagID": 4},
+                {"userID": 3, "artistID": 72, "tagID": 4},
+            ]
+        )
+        tags = pd.DataFrame(
+            [
+                {"tagID": 1, "tagValue": "acoustic"},
+                {"tagID": 2, "tagValue": "seen live"},
+                {"tagID": 3, "tagValue": "favorites"},
+                {"tagID": 4, "tagValue": "tiny"},
+            ]
+        )
+
+        cleaned_user_tags, cleaned_tags = filter_tags_by_proposal_rules(user_tags, tags)
+
+        self.assertEqual(set(cleaned_tags["tagValue"]), {"acoustic"})
+        self.assertEqual(set(cleaned_user_tags["tagID"]), {1})
 
 
 if __name__ == "__main__":

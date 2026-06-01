@@ -1,3 +1,5 @@
+These examples are still representative after cleaning. The cleaned-tag run changed the pure tag baseline more than the top qualitative match structure.
+
 | model | target_user | matched_user | score | artist_similarity | tag_similarity | niche_overlap | discovery | shared_artists | target_top_artists | match_top_artists | target_top_tags | match_top_tags |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 0 | 899 | 946 | 0.8000 | 1.0000 | 1.0000 | 0.0000 | 1.0000 | Cobra Starship; Metro Station; Simple Plan; Paramore; The Used | Forever the Sickest Kids; All Time Low; The Friday Night Boys; The Maine; Metro Station | All Time Low; Fresno; Metro Station; DOYOULIKE?; Forever the Sickest Kids | powerpop; pop punk; country; thbstofthehistory; gabegonnagetuhigh | pop punk; emocore; screamo; post-hardcore; hardcore |

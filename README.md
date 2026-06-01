@@ -23,6 +23,16 @@ This project treats music taste matchmaking as a user-user recommendation proble
 
 Interpretation for the presentation: the learned ranker performs best because it learns how to combine compatibility signals. The proposal hybrid remains useful as the interpretable version of the idea, but artist cosine slightly beats it on top-k ranking metrics; the hybrid's advantage over artist cosine is AUC and explainability.
 
+## Cleaned-Tag Experiment
+
+We also ran a cleaned-tag variant based on the proposal in `src/data_cleaning_decision_making.md`. The cleaning step keeps tags with at least 20 assignments, 5 users, and 5 artists; removes obvious noisy tags such as years/decades, "seen live", favorites, personal-list tags, and pure opinion tags; preserves the ambiguous but useful genre/mood tags called out in the proposal; and counts unique artists per user-tag pair to reduce repeated-tagging skew.
+
+- Cleaned learned ranker: NDCG@10 = 0.4467, Recall@10 = 0.5716, AUC = 0.8785.
+- Cleaned proposal hybrid: NDCG@10 = 0.3662, Recall@10 = 0.4781, AUC = 0.8325.
+- Cleaned tag cosine: NDCG@10 = 0.3090, Recall@10 = 0.4083, AUC = 0.6291.
+
+Interpretation: cleaning was modestly useful. It barely changed the artist-driven and hybrid models, but it improved the pure tag model noticeably, which is consistent with the fact that only the tag pipeline was cleaned.
+
 ## Evaluation Setup
 
 - Dataset: HetRec 2011 Last.fm 2K.
@@ -54,6 +64,7 @@ From the repository root:
 ```bash
 python3 -m unittest discover -s tests
 python3 run_experiment.py
+python3 run_experiment.py --loader cleaned
 ```
 
 The runner expects the HetRec files under `dataset/`, which are already included in this repository.

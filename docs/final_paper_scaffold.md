@@ -10,7 +10,7 @@ Explain why music taste can support social recommendation, not just song recomme
 Use the three proposal papers: graph bottlenecked social recommendation, attribute-aware music personalization, and popularity-bias mitigation in music recommenders.
 
 ## Methodology
-Describe preprocessing, friend-link splitting, sampled-negative evaluation, the filtered taste-aligned ground-truth analysis, baselines, proposal hybrid scoring, and learned ranker.
+Describe preprocessing, friend-link splitting, sampled-negative evaluation, the filtered taste-aligned ground-truth analysis, baselines, proposal hybrid scoring, learned ranker, and a cleaned-tag ablation. The cleaned-tag ablation should cover the thresholds `assignments >= 20`, `users >= 5`, `artists >= 5`, removal of noisy tags such as years/decades, "seen live", favorites, personal-list tags, and pure opinion tags, preservation of ambiguous useful tags, and unique-artist counting for user-tag features.
 
 ## Experiments and Results
 Include this table:
@@ -26,6 +26,7 @@ Include this table:
 | random | 0.0286 | 0.0298 | 0.0453 | 0.0863 | 0.0389 | 0.0543 | 0.0226 | 0.0260 | 0.4925 | 1126.0000 |
 
 Discuss NDCG@10, Recall@10, MAP@10, and qualitative matches.
+Add a short cleaned-tag comparison: learned ranker NDCG@10 0.4467, proposal hybrid 0.3662, and tag cosine 0.3090. The main conclusion is that cleaning mostly helped the pure tag model and had little effect on the strongest overall models.
 
 ## Discussion
 Compare interpretability versus predictive flexibility. Explain why friend links are useful but noisy.

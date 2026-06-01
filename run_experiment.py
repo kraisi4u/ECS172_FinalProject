@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
@@ -7,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from src.data_loader import load_hetrec_proposal_cleaned
 from src.music_match import (
     Dataset,
     dense_similarity,
@@ -33,7 +35,14 @@ ARTIFACT_DIR = ROOT / "artifacts"
 DOCS_DIR = ROOT / "docs"
 
 
-def evaluate_models(dataset: Dataset) -> dict:
+def output_path(directory: Path, filename: str, suffix: str = "") -> Path:
+    if not suffix:
+        return directory / filename
+    stem, ext = filename.rsplit(".", 1)
+    return directory / f"{stem}-{suffix}.{ext}"
+
+
+def evaluate_models(dataset: Dataset, output_suffix: str = "") -> dict:
     train_edges, validation_edges, test_edges = split_friend_edges_by_user(dataset.edges, seed=172)
     validation_cases = make_eval_cases(validation_edges, dataset.edges, dataset.user_to_idx, negatives_per_user=100, seed=172)
     test_cases = make_eval_cases(test_edges, dataset.edges, dataset.user_to_idx, negatives_per_user=100, seed=173)
@@ -41,7 +50,7 @@ def evaluate_models(dataset: Dataset) -> dict:
     artist_cosine_raw = dense_similarity(dataset.user_artist_norm)
     friend_random_summary = friend_random_similarity_summary(artist_cosine_raw, dataset.edges, dataset.user_to_idx)
     filtered_gt = filtered_ground_truth_pairs(artist_cosine_raw, dataset.edges, dataset.user_to_idx)
-    filtered_gt.to_csv(ARTIFACT_DIR / "filtered_ground_truth_pairs.csv", index=False)
+    filtered_gt.to_csv(output_path(ARTIFACT_DIR, "filtered_ground_truth_pairs.csv", output_suffix), index=False)
 
     artist_sim = minmax_rows(artist_cosine_raw)
     tag_sim = minmax_rows(dense_similarity(dataset.user_tag_norm))
@@ -84,10 +93,10 @@ def evaluate_models(dataset: Dataset) -> dict:
     }
     metrics = {name: rank_metrics(score, test_cases) for name, score in models.items()}
     leaderboard = pd.DataFrame(metrics).T.sort_values("ndcg@10", ascending=False)
-    leaderboard.to_csv(ARTIFACT_DIR / "leaderboard.csv", float_format="%.6f")
+    leaderboard.to_csv(output_path(ARTIFACT_DIR, "leaderboard.csv", output_suffix), float_format="%.6f")
 
     examples = top_match_examples(hybrid_score, dataset, components)
-    examples.to_csv(ARTIFACT_DIR / "qualitative_matches.csv", index=False)
+    examples.to_csv(output_path(ARTIFACT_DIR, "qualitative_matches.csv", output_suffix), index=False)
 
     payload = {
         "dataset": {
@@ -113,13 +122,14 @@ def evaluate_models(dataset: Dataset) -> dict:
         "learned_ranker_training": learned_training,
         "test_metrics": metrics,
     }
-    save_json(ARTIFACT_DIR / "results.json", payload)
-    save_figures(leaderboard)
-    save_docs(payload, leaderboard, examples)
+    save_json(output_path(ARTIFACT_DIR, "results.json", output_suffix), payload)
+    save_figures(leaderboard, output_suffix)
+    if not output_suffix:
+        save_docs(payload, leaderboard, examples)
     return payload
 
 
-def save_figures(leaderboard: pd.DataFrame) -> None:
+def save_figures(leaderboard: pd.DataFrame, output_suffix: str = "") -> None:
     plt.style.use("seaborn-v0_8-whitegrid")
     fig, ax = plt.subplots(figsize=(9, 5))
     order = leaderboard.sort_values("ndcg@10")
@@ -128,7 +138,7 @@ def save_figures(leaderboard: pd.DataFrame) -> None:
     ax.set_xlabel("NDCG@10")
     ax.set_ylabel("")
     fig.tight_layout()
-    fig.savefig(ARTIFACT_DIR / "ndcg10_comparison.png", dpi=180)
+    fig.savefig(output_path(ARTIFACT_DIR, "ndcg10_comparison.png", output_suffix), dpi=180)
     plt.close(fig)
 
     fig, ax = plt.subplots(figsize=(9, 5))
@@ -138,7 +148,7 @@ def save_figures(leaderboard: pd.DataFrame) -> None:
     ax.set_ylabel("Metric value")
     ax.tick_params(axis="x", labelrotation=35)
     fig.tight_layout()
-    fig.savefig(ARTIFACT_DIR / "top10_metrics.png", dpi=180)
+    fig.savefig(output_path(ARTIFACT_DIR, "top10_metrics.png", output_suffix), dpi=180)
     plt.close(fig)
 
 
@@ -300,10 +310,24 @@ def markdown_table(frame: pd.DataFrame) -> str:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Run the music taste matching experiment.")
+    parser.add_argument(
+        "--loader",
+        choices=("raw", "cleaned"),
+        default="raw",
+        help="Choose whether to load the raw dataset or the cleaned-tag dataset.",
+    )
+    args = parser.parse_args()
+
     ARTIFACT_DIR.mkdir(exist_ok=True)
     DOCS_DIR.mkdir(exist_ok=True)
-    dataset = load_hetrec(RAW_DIR)
-    payload = evaluate_models(dataset)
+    if args.loader == "cleaned":
+        dataset = load_hetrec_proposal_cleaned(RAW_DIR)
+        output_suffix = "cleaned"
+    else:
+        dataset = load_hetrec(RAW_DIR)
+        output_suffix = ""
+    payload = evaluate_models(dataset, output_suffix=output_suffix)
     print(json.dumps(payload["dataset"], indent=2))
     print(pd.DataFrame(payload["test_metrics"]).T.sort_values("ndcg@10", ascending=False).to_string(float_format=lambda x: f"{x:.4f}"))
 

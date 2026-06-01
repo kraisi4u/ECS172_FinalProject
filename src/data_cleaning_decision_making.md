@@ -67,28 +67,23 @@ The artist and tag vectors are dictionaries keyed by `userID`. Each user's vecto
 Example:
 
 ```python
-from data_loader import LastFMLoader
+from pathlib import Path
 
-loader = LastFMLoader()
-artist_vectors = loader.artist_vectors()
-tag_vectors = loader.tag_vectors()
-friend_edges = loader.friend_edge_set()
+from src.data_loader import HetrecLoader
+
+loader = HetrecLoader(Path("dataset"))
+dataset = loader.load()
 
 u = 2
 v = 275
 
-artist_sim = loader.cosine_from_vectors(
-    artist_vectors.get(u, {}),
-    artist_vectors.get(v, {}),
-)
+ui = dataset.user_to_idx[u]
+vi = dataset.user_to_idx[v]
 
-tag_sim = loader.cosine_from_vectors(
-    tag_vectors.get(u, {}),
-    tag_vectors.get(v, {}),
-)
+artist_sim = float(dataset.user_artist_norm[ui].multiply(dataset.user_artist_norm[vi]).sum())
+tag_sim = float(dataset.user_tag_norm[ui].multiply(dataset.user_tag_norm[vi]).sum())
 
-is_friend = loader.normalize_edge(u, v) in friend_edges
+is_friend = (min(u, v), max(u, v)) in set(dataset.edges)
 ```
 
 This setup supports the proposed hybrid model directly, while still leaving the cleaned CSVs available for other architectures.
-

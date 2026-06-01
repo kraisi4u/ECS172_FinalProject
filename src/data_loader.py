@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -129,5 +130,94 @@ class HetrecLoader(BaseHetrecLoader):
     """Default loader that preserves the project's current raw-data behavior."""
 
 
+AMBIGUOUS_USEFUL_TAGS = {
+    "singer-songwriter",
+    "soundtrack",
+    "acoustic",
+    "chillout",
+    "metalcore",
+    "synthpop",
+    "downtempo",
+    "idm",
+}
+
+PROPOSAL_BAD_TAG_PATTERNS = (
+    re.compile(r"(?:^|\b)(?:19|20)\d{2}(?:\b|$)"),
+    re.compile(r"(?:^|\b)(?:19|20)?\d0s(?:\b|$)"),
+    re.compile(r"(?:^|\b)\d{2}s(?:\b|$)"),
+    re.compile(r"\blive\b"),
+    re.compile(r"\b(?:fav|favs|favorite|favorites|favourite|favourites)\b"),
+    re.compile(r"\b(?:best|awesome|amazing|beautiful|cool|good music|great|love|hate|sexy|lovely)\b"),
+    re.compile(r"\b(?:my|songs?|albums?|artists?|tracks?|music)\s+(?:i\s+)?(?:own|like|love|want|need)\b"),
+    re.compile(r"\b(?:my\s+(?:fav|favorite|favourite)|playlist|wish\s*list|under\s+\d+\s+listeners)\b"),
+)
+
+
+def filter_tags_by_proposal_rules(
+    user_tags: pd.DataFrame,
+    tags: pd.DataFrame,
+    min_assignments: int = 20,
+    min_users: int = 5,
+    min_artists: int = 5,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Apply the proposal's tag cleaning rules to the raw tag tables."""
+
+    tag_stats = (
+        user_tags.groupby("tagID")
+        .agg(
+            assignments=("userID", "size"),
+            users=("userID", "nunique"),
+            artists=("artistID", "nunique"),
+        )
+        .reset_index()
+    )
+    tags_with_stats = tags.merge(tag_stats, on="tagID", how="left").fillna({"assignments": 0, "users": 0, "artists": 0})
+    tags_with_stats["assignments"] = tags_with_stats["assignments"].astype(int)
+    tags_with_stats["users"] = tags_with_stats["users"].astype(int)
+    tags_with_stats["artists"] = tags_with_stats["artists"].astype(int)
+
+    normalized = tags_with_stats["tagValue"].astype(str).str.strip().str.lower()
+    keep_mask = (
+        (tags_with_stats["assignments"] >= min_assignments)
+        & (tags_with_stats["users"] >= min_users)
+        & (tags_with_stats["artists"] >= min_artists)
+    )
+    keep_mask &= ~normalized.apply(
+        lambda value: value not in AMBIGUOUS_USEFUL_TAGS and any(pattern.search(value) for pattern in PROPOSAL_BAD_TAG_PATTERNS)
+    )
+
+    cleaned_tags = tags_with_stats.loc[keep_mask, ["tagID", "tagValue"]].reset_index(drop=True)
+    cleaned_user_tags = user_tags[user_tags["tagID"].isin(cleaned_tags["tagID"])].copy()
+    return cleaned_user_tags, cleaned_tags
+
+
+class ProposalCleanHetrecLoader(HetrecLoader):
+    """Loader that applies the proposal's tag-cleaning rules before vectorization."""
+
+    def load_tables(self) -> dict[str, pd.DataFrame]:
+        tables = super().load_tables()
+        cleaned_user_tags, cleaned_tags = filter_tags_by_proposal_rules(tables["user_tags"], tables["tags"])
+        tables["user_tags"] = cleaned_user_tags
+        tables["tags"] = cleaned_tags
+        return tables
+
+    def preprocess_user_tags(
+        self,
+        user_tags: pd.DataFrame,
+        user_to_idx: dict[int, int],
+        tag_to_idx: dict[int, int],
+    ) -> sparse.csr_matrix:
+        # Count distinct artists per user-tag pair to reduce repeat-tagging skew.
+        tag_counts = user_tags.groupby(["userID", "tagID"])["artistID"].nunique().reset_index(name="count")
+        ut_rows = tag_counts.userID.map(user_to_idx).to_numpy()
+        ut_cols = tag_counts.tagID.map(tag_to_idx).to_numpy()
+        user_tag_raw = sparse.csr_matrix((tag_counts["count"].to_numpy(dtype=float), (ut_rows, ut_cols)), shape=(len(user_to_idx), len(tag_to_idx)))
+        return normalize(user_tag_raw, norm="l2", axis=1)
+
+
 def load_hetrec(raw_dir: Path) -> Dataset:
     return HetrecLoader(raw_dir).load()
+
+
+def load_hetrec_proposal_cleaned(raw_dir: Path) -> Dataset:
+    return ProposalCleanHetrecLoader(raw_dir).load()

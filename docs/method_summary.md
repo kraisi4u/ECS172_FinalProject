@@ -15,6 +15,10 @@ The project treats music taste matchmaking as a user-user recommendation problem
 - Evaluation ranks each held-out friend against 100 sampled non-friends for the same target user.
 - Niche artists: 10679 artists at or below the 30th listener-count percentile.
 
+## Cleaned-tag variant
+
+We also evaluated a cleaned-tag variant based on the original proposal. The cleaning keeps tags with at least 20 assignments, 5 users, and 5 artists, removes obvious noise such as years/decades, "seen live", favorites, personal-list tags, and pure opinion tags, preserves ambiguous but useful tags like `acoustic`, `soundtrack`, and `idm`, and counts unique tagged artists per user-tag pair to reduce repeated-tagging skew.
+
 ## Gemini/context evidence and ground truth choice
 
 The Gemini thread correctly raised the key question: friends are not perfect music-compatibility labels. We therefore keep the held-out friend-link task for measurable evaluation, but we also quantify the signal and construct a filtered compatibility view.
@@ -56,6 +60,16 @@ The Gemini thread also proposed a two-tower neural retrieval model. We did not t
 | random | 0.0286 | 0.0298 | 0.0453 | 0.0863 | 0.0389 | 0.0543 | 0.0226 | 0.0260 | 0.4925 | 1126.0000 |
 
 The strongest model by NDCG@10 was `teammate_learned_ranker` with NDCG@10=0.4452. The proposal hybrid produced NDCG@10=0.3656; the learned ranker produced NDCG@10=0.4452. The learned ranker performs best because it can combine the compatibility signals nonlinearly. The proposal hybrid remains the more interpretable version of the idea, but it does not beat plain artist cosine on top-K ranking; its advantage over artist cosine is in AUC. All results should still be interpreted with the sampled-negative setup and noisy friend-link proxy in mind.
+
+## Cleaned-tag comparison
+
+Relative to the baseline above, the cleaned-tag run changed the headline metrics as follows:
+
+- Learned ranker: NDCG@10 0.4467 vs 0.4452, Recall@10 0.5716 vs 0.5701, AUC 0.8785 vs 0.8807.
+- Proposal hybrid: NDCG@10 0.3662 vs 0.3656, Recall@10 0.4781 vs 0.4776, AUC 0.8325 vs 0.8320.
+- Tag cosine: NDCG@10 0.3090 vs 0.2872, Recall@10 0.4083 vs 0.3887, AUC 0.6291 vs 0.6317.
+
+Conclusion: cleaning was modestly useful overall. It clearly improved the pure tag baseline, while leaving the artist-driven, hybrid, and learned models almost unchanged.
 
 ## Interpretation
 

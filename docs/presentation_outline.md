@@ -6,6 +6,7 @@
 
 2. Data and task
    - HetRec Last.fm 2K: listening counts, tags, and friend links.
+   - Cleaned-tag variant: tag reliability thresholds plus noisy-tag removal.
    - Friends are musically closer than random non-friends: cosine 0.1999 vs 0.0469.
    - Train/validation/test split on friend links.
    - Evaluation: held-out friends ranked against 100 sampled non-friends per target.
@@ -24,7 +25,9 @@
    - Best model: teammate_learned_ranker, NDCG@10=0.4452.
    - Proposal hybrid: NDCG@10=0.3656, Recall@10=0.4776.
    - Learned ranker: NDCG@10=0.4452, Recall@10=0.5701.
+   - Cleaned-tag run: learned ranker NDCG@10=0.4467, proposal hybrid NDCG@10=0.3662, tag cosine NDCG@10=0.3090.
    - Main takeaway: learned weighting performs best; the proposal hybrid is simpler and more interpretable.
+   - Cleaning takeaway: useful mostly for the tag-only model; little change for the stronger overall models.
    - Caveat: artist cosine slightly beats the proposal hybrid on top-K metrics, so the hybrid's value is interpretability and AUC rather than raw top-K lift.
    - Show `artifacts/ndcg10_comparison.png` and `artifacts/top10_metrics.png`.
 
