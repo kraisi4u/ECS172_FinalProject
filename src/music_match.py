@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import math
 import random
-from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -15,36 +14,10 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import normalize
 
+from src.data_loader import Dataset, build_undirected_edges, load_hetrec
+
 
 RNG_SEED = 172
-
-
-@dataclass(frozen=True)
-class Dataset:
-    users: np.ndarray
-    artists: np.ndarray
-    user_to_idx: dict[int, int]
-    idx_to_user: dict[int, int]
-    artist_to_idx: dict[int, int]
-    idx_to_artist: dict[int, int]
-    idx_to_tag: dict[int, int]
-    artist_names: dict[int, str]
-    tag_names: dict[int, str]
-    user_artist_raw: sparse.csr_matrix
-    user_artist_norm: sparse.csr_matrix
-    user_tag_norm: sparse.csr_matrix
-    edges: list[tuple[int, int]]
-
-
-def build_undirected_edges(friend_df: pd.DataFrame) -> list[tuple[int, int]]:
-    edges: set[tuple[int, int]] = set()
-    for u, v in friend_df[["userID", "friendID"]].itertuples(index=False):
-        u_int = int(u)
-        v_int = int(v)
-        if u_int == v_int:
-            continue
-        edges.add((min(u_int, v_int), max(u_int, v_int)))
-    return sorted(edges)
 
 
 def split_friend_edges_by_user(
@@ -101,60 +74,6 @@ def compute_niche_overlap(matrix: np.ndarray, target_idx: int, candidate_idx: in
         return 0.0
     shared_mass = float(np.minimum(target, candidate).sum())
     return shared_mass / target_mass
-
-
-def load_hetrec(raw_dir: Path) -> Dataset:
-    def table(name: str, **kwargs: object) -> pd.DataFrame:
-        dat_path = raw_dir / f"{name}.dat"
-        csv_path = raw_dir / f"{name}.csv"
-        path = dat_path if dat_path.exists() else csv_path
-        return pd.read_csv(path, sep="\t", **kwargs)
-
-    user_artists = table("user_artists")
-    user_tags = table("user_taggedartists")
-    friends = table("user_friends")
-    artists = table("artists")
-    tags = table("tags", encoding="latin1")
-
-    users = np.array(sorted(set(user_artists.userID) | set(friends.userID) | set(friends.friendID)))
-    artist_ids = np.array(sorted(user_artists.artistID.unique()))
-    tag_ids = np.array(sorted(user_tags.tagID.unique()))
-
-    user_to_idx = {int(user_id): idx for idx, user_id in enumerate(users)}
-    artist_to_idx = {int(artist_id): idx for idx, artist_id in enumerate(artist_ids)}
-    tag_to_idx = {int(tag_id): idx for idx, tag_id in enumerate(tag_ids)}
-
-    ua_rows = user_artists.userID.map(user_to_idx).to_numpy()
-    ua_cols = user_artists.artistID.map(artist_to_idx).to_numpy()
-    ua_data = np.log1p(user_artists.weight.to_numpy(dtype=float))
-    user_artist_raw = sparse.csr_matrix((ua_data, (ua_rows, ua_cols)), shape=(len(users), len(artist_ids)))
-    user_artist_norm = normalize(user_artist_raw, norm="l2", axis=1)
-
-    tag_counts = user_tags.groupby(["userID", "tagID"]).size().reset_index(name="count")
-    ut_rows = tag_counts.userID.map(user_to_idx).to_numpy()
-    ut_cols = tag_counts.tagID.map(tag_to_idx).to_numpy()
-    user_tag_raw = sparse.csr_matrix((tag_counts["count"].to_numpy(dtype=float), (ut_rows, ut_cols)), shape=(len(users), len(tag_ids)))
-    user_tag_norm = normalize(user_tag_raw, norm="l2", axis=1)
-
-    artist_id_column = "artistID" if "artistID" in artists.columns else "id"
-    artist_names = dict(zip(artists[artist_id_column].astype(int), artists.name.astype(str)))
-    tag_names = dict(zip(tags.tagID.astype(int), tags.tagValue.astype(str)))
-
-    return Dataset(
-        users=users,
-        artists=artist_ids,
-        user_to_idx=user_to_idx,
-        idx_to_user={idx: int(user_id) for user_id, idx in user_to_idx.items()},
-        artist_to_idx=artist_to_idx,
-        idx_to_artist={idx: int(artist_id) for artist_id, idx in artist_to_idx.items()},
-        idx_to_tag={idx: int(tag_id) for tag_id, idx in tag_to_idx.items()},
-        artist_names=artist_names,
-        tag_names=tag_names,
-        user_artist_raw=user_artist_raw,
-        user_artist_norm=user_artist_norm,
-        user_tag_norm=user_tag_norm,
-        edges=build_undirected_edges(friends),
-    )
 
 
 def dense_similarity(matrix: sparse.csr_matrix) -> np.ndarray:

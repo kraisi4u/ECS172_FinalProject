@@ -43,7 +43,7 @@ Propose 5 feature files in `dataset/features/`, which are as follows:
 2. `user_tag_features.csv`
 3. `artist_popularity.csv`
 4. `niche_artists.csv`
-5. `friend_edges_undirected.csv`. 
+5. `friend_edges_undirected.csv`. t
 
 These are specifically compiled for Model Architecture 1 described in our proposal, with different feature setups being required for a different model.
 
