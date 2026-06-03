@@ -7,6 +7,7 @@ from src.data_loader import filter_tags_by_proposal_rules
 from src.music_match import (
     build_undirected_edges,
     compute_niche_overlap,
+    dual_space_score_matrix,
     filtered_ground_truth_pairs,
     friend_random_similarity_summary,
     split_friend_edges_by_user,
@@ -188,6 +189,44 @@ class MusicMatchTests(unittest.TestCase):
 
         self.assertEqual(set(cleaned_tags["tagValue"]), {"acoustic"})
         self.assertEqual(set(cleaned_user_tags["tagID"]), {1})
+
+    def test_dual_space_score_combines_comfort_and_complementarity(self):
+        taste = np.array(
+            [
+                [1.0, 0.0],
+                [1.0, 0.0],
+                [0.0, 1.0],
+            ],
+            dtype=np.float32,
+        )
+        seeker = np.array(
+            [
+                [1.0, 0.0],
+                [0.0, 1.0],
+                [1.0, 0.0],
+            ],
+            dtype=np.float32,
+        )
+        curator = np.array(
+            [
+                [0.0, 1.0],
+                [1.0, 0.0],
+                [0.0, 1.0],
+            ],
+            dtype=np.float32,
+        )
+
+        score = dual_space_score_matrix(
+            taste,
+            seeker,
+            curator,
+            comfort_weight=0.5,
+            complement_weight=0.5,
+            reciprocal_weight=0.0,
+        )
+
+        self.assertGreater(score[0, 1], score[0, 2])
+        self.assertTrue(np.isneginf(score[0, 0]))
 
 
 if __name__ == "__main__":

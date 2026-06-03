@@ -1,7 +1,7 @@
 # Final Paper Scaffold
 
 ## Abstract
-We study music taste matchmaking as a user-user recommendation problem using the HetRec 2011 Last.fm dataset. The system ranks candidate users for a target user using listening histories, tags, niche artist overlap, and discovery potential. We compare simple baselines, an interpretable hybrid compatibility score, and a reliability-filtered learned ranker trained on held-out friend links.
+We study music taste matchmaking as a user-user recommendation problem using the HetRec 2011 Last.fm dataset. The system ranks candidate users for a target user using listening histories, tags, niche artist overlap, and discovery potential. We compare simple baselines, an interpretable hybrid compatibility score, a novel dual-space complementary model, and a reliability-filtered learned ranker trained on held-out friend links.
 
 ## Introduction
 Explain why music taste can support social recommendation, not just song recommendation. State the retrieval task and the novelty axis.
@@ -10,13 +10,14 @@ Explain why music taste can support social recommendation, not just song recomme
 Use the three proposal papers: graph bottlenecked social recommendation, attribute-aware music personalization, and popularity-bias mitigation in music recommenders.
 
 ## Methodology
-Describe preprocessing, friend-link splitting, sampled-negative evaluation, the filtered taste-aligned ground-truth analysis, baselines, proposal hybrid scoring, learned ranker, and a cleaned-tag ablation. The cleaned-tag ablation should cover the thresholds `assignments >= 20`, `users >= 5`, `artists >= 5`, removal of noisy tags such as years/decades, "seen live", favorites, personal-list tags, and pure opinion tags, preservation of ambiguous useful tags, and unique-artist counting for user-tag features.
+Describe preprocessing, friend-link splitting, sampled-negative evaluation, the filtered taste-aligned ground-truth analysis, baselines, proposal hybrid scoring, the dual-space complementary model, and learned ranker.
 
 ## Experiments and Results
 Include this table:
 
 | model | precision@5 | precision@10 | recall@5 | recall@10 | ndcg@5 | ndcg@10 | map@5 | map@10 | auc | evaluated_targets |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| dual_space_complementary | 0.2581 | 0.1921 | 0.4518 | 0.6283 | 0.4276 | 0.4823 | 0.3373 | 0.3596 | 0.9006 | 1126.0000 |
 | teammate_learned_ranker | 0.2361 | 0.1795 | 0.4050 | 0.5701 | 0.3923 | 0.4452 | 0.3071 | 0.3289 | 0.8807 | 1126.0000 |
 | artist_cosine | 0.1961 | 0.1473 | 0.3510 | 0.4824 | 0.3317 | 0.3736 | 0.2557 | 0.2701 | 0.8209 | 1126.0000 |
 | proposal_hybrid | 0.1933 | 0.1467 | 0.3383 | 0.4776 | 0.3213 | 0.3656 | 0.2445 | 0.2604 | 0.8320 | 1126.0000 |
@@ -26,10 +27,9 @@ Include this table:
 | random | 0.0286 | 0.0298 | 0.0453 | 0.0863 | 0.0389 | 0.0543 | 0.0226 | 0.0260 | 0.4925 | 1126.0000 |
 
 Discuss NDCG@10, Recall@10, MAP@10, and qualitative matches.
-Add a short cleaned-tag comparison: learned ranker NDCG@10 0.4467, proposal hybrid 0.3662, and tag cosine 0.3090. The main conclusion is that cleaning mostly helped the pure tag model and had little effect on the strongest overall models.
 
 ## Discussion
-Compare interpretability versus predictive flexibility. Explain why friend links are useful but noisy.
+Compare interpretability, complementary-matching structure, and predictive flexibility. Explain why friend links are useful but noisy.
 
 ## Limitations and Ethics
 Mention old dataset, small sample, social links not pure compatibility, and privacy/cultural-signal concerns.

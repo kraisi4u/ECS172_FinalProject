@@ -137,6 +137,81 @@ def discovery_matrix(user_artist_raw: sparse.csr_matrix, user_emb: np.ndarray, i
     return minmax_rows(discovery)
 
 
+def friend_matrix(train_edges: list[tuple[int, int]], user_to_idx: dict[int, int]) -> sparse.csr_matrix:
+    rows = []
+    cols = []
+    for u, v in train_edges:
+        if u in user_to_idx and v in user_to_idx:
+            ui = user_to_idx[u]
+            vi = user_to_idx[v]
+            rows.extend([ui, vi])
+            cols.extend([vi, ui])
+    data = np.ones(len(rows), dtype=np.float32)
+    matrix = sparse.csr_matrix((data, (rows, cols)), shape=(len(user_to_idx), len(user_to_idx)))
+    return normalize(matrix, norm="l2", axis=1)
+
+
+def svd_embedding(matrix: sparse.spmatrix, n_components: int, seed: int = RNG_SEED) -> np.ndarray:
+    limit = min(matrix.shape) - 1
+    if limit < 1:
+        return np.zeros((matrix.shape[0], 1), dtype=np.float32)
+    n_components = min(n_components, limit)
+    svd = TruncatedSVD(n_components=n_components, random_state=seed)
+    emb = svd.fit_transform(matrix).astype(np.float32)
+    return normalize(emb, norm="l2", axis=1).astype(np.float32)
+
+
+def dual_space_initial_embeddings(
+    dataset: Dataset,
+    train_edges: list[tuple[int, int]],
+    n_components: int = 32,
+    seed: int = RNG_SEED,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    train_friend_norm = friend_matrix(train_edges, dataset.user_to_idx)
+    artist_binary = (dataset.user_artist_raw > 0).astype(np.float32)
+    listener_counts = np.asarray(artist_binary.sum(axis=0)).ravel()
+    artist_idf = np.log1p((dataset.user_artist_raw.shape[0] + 1) / np.maximum(listener_counts, 1.0))
+    rarity_artist = normalize(dataset.user_artist_norm.multiply(artist_idf), norm="l2", axis=1)
+
+    taste_features = sparse.hstack(
+        [dataset.user_artist_norm, dataset.user_tag_norm * 0.45, train_friend_norm * 0.30],
+        format="csr",
+    )
+    curator_features = sparse.hstack(
+        [rarity_artist, dataset.user_tag_norm * 0.30, train_friend_norm * 0.20],
+        format="csr",
+    )
+
+    taste = svd_embedding(taste_features, n_components, seed)
+    curator = svd_embedding(curator_features, n_components, seed + 1)
+    seeker = taste.copy()
+    return taste, seeker, curator
+
+
+def dual_space_score_matrix(
+    taste: np.ndarray,
+    seeker: np.ndarray,
+    curator: np.ndarray,
+    comfort_weight: float = 0.45,
+    complement_weight: float = 0.45,
+    reciprocal_weight: float = 0.10,
+    candidate_bias: np.ndarray | None = None,
+    normalize_scores: bool = True,
+) -> np.ndarray:
+    score = (
+        comfort_weight * (taste @ taste.T)
+        + complement_weight * (seeker @ curator.T)
+        + reciprocal_weight * (curator @ seeker.T)
+    ).astype(np.float32)
+    if candidate_bias is not None:
+        score += candidate_bias[None, :].astype(np.float32)
+    np.fill_diagonal(score, -np.inf)
+    if normalize_scores:
+        score = minmax_rows(score)
+        np.fill_diagonal(score, -np.inf)
+    return score.astype(np.float32)
+
+
 def adjacency_from_edges(edges: list[tuple[int, int]], user_to_idx: dict[int, int]) -> dict[int, set[int]]:
     friends: dict[int, set[int]] = {idx: set() for idx in range(len(user_to_idx))}
     for u, v in edges:
@@ -340,6 +415,39 @@ def tune_hybrid_weights(
     return best_weights, best_matrix.astype(np.float32), best_metrics
 
 
+def tune_dual_space_blend(
+    dual_score: np.ndarray,
+    components: dict[str, np.ndarray],
+    validation_cases: dict[int, list[tuple[int, int]]],
+) -> tuple[dict[str, float], np.ndarray, dict[str, float]]:
+    blend_options = [
+        {"dual": 1.00, "artist": 0.00, "tag": 0.00, "niche": 0.00, "discovery": 0.00},
+        {"dual": 0.80, "artist": 0.05, "tag": 0.05, "niche": 0.05, "discovery": 0.05},
+        {"dual": 0.70, "artist": 0.10, "tag": 0.05, "niche": 0.10, "discovery": 0.05},
+        {"dual": 0.60, "artist": 0.20, "tag": 0.05, "niche": 0.10, "discovery": 0.05},
+        {"dual": 0.50, "artist": 0.30, "tag": 0.05, "niche": 0.10, "discovery": 0.05},
+        {"dual": 0.45, "artist": 0.35, "tag": 0.05, "niche": 0.10, "discovery": 0.05},
+    ]
+    best_weights = blend_options[0]
+    best_score = -1.0
+    best_matrix = None
+    best_metrics: dict[str, float] = {}
+    for weights in blend_options:
+        matrix = weights["dual"] * dual_score
+        for name in ("artist", "tag", "niche", "discovery"):
+            matrix = matrix + weights[name] * components[name]
+        np.fill_diagonal(matrix, -np.inf)
+        metrics = rank_metrics(matrix, validation_cases)
+        score = metrics["ndcg@10"]
+        if score > best_score:
+            best_score = score
+            best_weights = weights
+            best_matrix = matrix
+            best_metrics = metrics
+    assert best_matrix is not None
+    return best_weights, best_matrix.astype(np.float32), best_metrics
+
+
 def pair_features(
     pairs: list[tuple[int, int]],
     components: dict[str, np.ndarray],
@@ -366,6 +474,134 @@ def pair_features(
             ]
         )
     return np.nan_to_num(np.asarray(rows, dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+
+
+def train_dual_space_matcher(
+    train_edges: list[tuple[int, int]],
+    all_edges: list[tuple[int, int]],
+    dataset: Dataset,
+    components: dict[str, np.ndarray],
+    validation_cases: dict[int, list[tuple[int, int]]],
+    seed: int = RNG_SEED,
+) -> tuple[np.ndarray, dict[str, object]]:
+    configs = [
+        {"dim": 24, "epochs": 12, "lr": 0.035, "reg": 0.0015, "comfort": 0.50, "complement": 0.40, "reciprocal": 0.10},
+    ]
+    all_adj = adjacency_from_edges(all_edges, dataset.user_to_idx)
+    n_users = len(dataset.users)
+    directed_positive_pairs = []
+    for u, v in train_edges:
+        ui = dataset.user_to_idx[u]
+        vi = dataset.user_to_idx[v]
+        directed_positive_pairs.extend([(ui, vi), (vi, ui)])
+
+    candidate_pool = []
+    all_idxs = np.arange(n_users, dtype=np.int32)
+    for u in range(n_users):
+        unavailable = all_adj[u] | {u}
+        candidates = np.array([idx for idx in all_idxs if int(idx) not in unavailable], dtype=np.int32)
+        candidate_pool.append(candidates)
+
+    best_score_matrix = None
+    best_summary: dict[str, object] = {}
+    best_validation = -1.0
+
+    for config_idx, config in enumerate(configs):
+        rng = np.random.default_rng(seed + config_idx)
+        taste, seeker, curator = dual_space_initial_embeddings(dataset, train_edges, int(config["dim"]), seed + config_idx)
+        candidate_bias = np.zeros(n_users, dtype=np.float32)
+        positive_order = np.arange(len(directed_positive_pairs))
+
+        for _ in range(int(config["epochs"])):
+            rng.shuffle(positive_order)
+            for start in range(0, len(positive_order), 512):
+                batch = positive_order[start : start + 512]
+                users = np.array([directed_positive_pairs[int(pos_idx)][0] for pos_idx in batch], dtype=np.int32)
+                positives = np.array([directed_positive_pairs[int(pos_idx)][1] for pos_idx in batch], dtype=np.int32)
+                negatives = np.array(
+                    [int(rng.choice(candidate_pool[int(u)])) for u in users if len(candidate_pool[int(u)]) > 0],
+                    dtype=np.int32,
+                )
+                if len(negatives) != len(users):
+                    keep = np.array([len(candidate_pool[int(u)]) > 0 for u in users], dtype=bool)
+                    users = users[keep]
+                    positives = positives[keep]
+                    if len(users) == 0:
+                        continue
+                    negatives = np.array([int(rng.choice(candidate_pool[int(u)])) for u in users], dtype=np.int32)
+
+                taste_u = taste[users].copy()
+                taste_v = taste[positives].copy()
+                taste_neg = taste[negatives].copy()
+                seeker_u = seeker[users].copy()
+                seeker_v = seeker[positives].copy()
+                seeker_neg = seeker[negatives].copy()
+                curator_u = curator[users].copy()
+                curator_v = curator[positives].copy()
+                curator_neg = curator[negatives].copy()
+
+                comfort = float(config["comfort"])
+                complement = float(config["complement"])
+                reciprocal = float(config["reciprocal"])
+                pos_score = (
+                    comfort * np.sum(taste_u * taste_v, axis=1)
+                    + complement * np.sum(seeker_u * curator_v, axis=1)
+                    + reciprocal * np.sum(curator_u * seeker_v, axis=1)
+                    + candidate_bias[positives]
+                )
+                neg_score = (
+                    comfort * np.sum(taste_u * taste_neg, axis=1)
+                    + complement * np.sum(seeker_u * curator_neg, axis=1)
+                    + reciprocal * np.sum(curator_u * seeker_neg, axis=1)
+                    + candidate_bias[negatives]
+                )
+                coeff = (1.0 / (1.0 + np.exp(np.clip(pos_score - neg_score, -30.0, 30.0)))).astype(np.float32)
+                lr = float(config["lr"])
+                reg = float(config["reg"])
+                coeff_col = coeff[:, None]
+
+                np.add.at(taste, users, lr * (coeff_col * comfort * (taste_v - taste_neg) - reg * taste_u))
+                np.add.at(taste, positives, lr * (coeff_col * comfort * taste_u - reg * taste_v))
+                np.add.at(taste, negatives, lr * (-coeff_col * comfort * taste_u - reg * taste_neg))
+
+                np.add.at(seeker, users, lr * (coeff_col * complement * (curator_v - curator_neg) - reg * seeker_u))
+                np.add.at(curator, positives, lr * (coeff_col * complement * seeker_u - reg * curator_v))
+                np.add.at(curator, negatives, lr * (-coeff_col * complement * seeker_u - reg * curator_neg))
+
+                np.add.at(curator, users, lr * (coeff_col * reciprocal * (seeker_v - seeker_neg) - reg * curator_u))
+                np.add.at(seeker, positives, lr * (coeff_col * reciprocal * curator_u - reg * seeker_v))
+                np.add.at(seeker, negatives, lr * (-coeff_col * reciprocal * curator_u - reg * seeker_neg))
+
+                np.add.at(candidate_bias, positives, lr * (coeff - reg * candidate_bias[positives]))
+                np.add.at(candidate_bias, negatives, lr * (-coeff - reg * candidate_bias[negatives]))
+
+        taste = normalize(taste, norm="l2", axis=1).astype(np.float32)
+        seeker = normalize(seeker, norm="l2", axis=1).astype(np.float32)
+        curator = normalize(curator, norm="l2", axis=1).astype(np.float32)
+        dual_score = dual_space_score_matrix(
+            taste,
+            seeker,
+            curator,
+            comfort_weight=float(config["comfort"]),
+            complement_weight=float(config["complement"]),
+            reciprocal_weight=float(config["reciprocal"]),
+            candidate_bias=candidate_bias,
+        )
+        blend_weights, blended_score, validation_metrics = tune_dual_space_blend(dual_score, components, validation_cases)
+        validation_score = validation_metrics["ndcg@10"]
+        if validation_score > best_validation:
+            best_validation = validation_score
+            best_score_matrix = blended_score
+            best_summary = {
+                "config": config,
+                "blend_weights": blend_weights,
+                "validation_metrics": validation_metrics,
+                "training_positive_pairs": float(len(directed_positive_pairs)),
+                "negative_candidates_mean": float(np.mean([len(candidates) for candidates in candidate_pool])),
+            }
+
+    assert best_score_matrix is not None
+    return best_score_matrix.astype(np.float32), best_summary
 
 
 def train_learned_ranker(

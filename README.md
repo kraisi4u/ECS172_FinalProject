@@ -11,17 +11,19 @@ This project treats music taste matchmaking as a user-user recommendation proble
 ## Implemented Approaches
 
 - Proposal/hybrid method: artist cosine similarity, tag cosine similarity, niche artist overlap, and discovery potential combined with validation-tuned weights.
+- Novel dual-space complementary method: pairwise-trained taste/comfort and seeker-curator embeddings, blended with interpretable compatibility signals.
 - Teammate/Gemini method: reliability-filtered learned ranker trained on friend pairs versus sampled non-friend pairs using the compatibility signals plus activity and popularity features.
 - Gemini/context analysis: friend-vs-random music similarity evidence and a filtered taste-aligned ground-truth file for future model training.
 - Baselines: random ranking, popularity degree, artist cosine, tag cosine, and SVD embedding similarity.
 
 ## Current Results
 
+- Dual-space complementary model: NDCG@10 = 0.4823, Recall@10 = 0.6283, AUC = 0.9006.
 - Learned ranker: NDCG@10 = 0.4452, Recall@10 = 0.5701, AUC = 0.8807.
 - Proposal hybrid: NDCG@10 = 0.3656, Recall@10 = 0.4776, AUC = 0.8320.
 - Artist cosine baseline: NDCG@10 = 0.3736, Recall@10 = 0.4824, AUC = 0.8209.
 
-Interpretation for the presentation: the learned ranker performs best because it learns how to combine compatibility signals. The proposal hybrid remains useful as the interpretable version of the idea, but artist cosine slightly beats it on top-k ranking metrics; the hybrid's advantage over artist cosine is AUC and explainability.
+Interpretation for the presentation: the dual-space model performs best because it models both shared taste comfort and complementary discovery value. The proposal hybrid remains useful as the interpretable version of the idea, but artist cosine slightly beats it on top-k ranking metrics; the hybrid's advantage over artist cosine is AUC and explainability.
 
 ## Cleaned-Tag Experiment
 

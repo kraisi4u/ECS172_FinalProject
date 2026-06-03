@@ -9,6 +9,38 @@
     "users": 1892,
     "validation_edges": 1908
   },
+  "dual_space_training": {
+    "blend_weights": {
+      "artist": 0.3,
+      "discovery": 0.05,
+      "dual": 0.5,
+      "niche": 0.1,
+      "tag": 0.05
+    },
+    "config": {
+      "comfort": 0.5,
+      "complement": 0.4,
+      "dim": 24,
+      "epochs": 12,
+      "lr": 0.035,
+      "reciprocal": 0.1,
+      "reg": 0.0015
+    },
+    "negative_candidates_mean": 1877.5570824524314,
+    "training_positive_pairs": 17802.0,
+    "validation_metrics": {
+      "auc": 0.9041322091912927,
+      "evaluated_targets": 1168.0,
+      "map@10": 0.3548438929097768,
+      "map@5": 0.3338182553272451,
+      "ndcg@10": 0.4725846192881925,
+      "ndcg@5": 0.418838921265852,
+      "precision@10": 0.1841609589041096,
+      "precision@5": 0.24486301369863014,
+      "recall@10": 0.6216311381354295,
+      "recall@5": 0.4492977081793865
+    }
+  },
   "filtered_ground_truth": {
     "negative_threshold": 0.02,
     "negatives": 8652,
@@ -24,7 +56,7 @@
     "random_nonfriend_pair_count": 50000.0
   },
   "hybrid_validation_metrics": {
-    "auc": 0.8348746591945234,
+    "auc": 0.8348746603163323,
     "evaluated_targets": 1168.0,
     "map@10": 0.25654409928767297,
     "map@5": 0.23490320585996957,
@@ -61,6 +93,18 @@
       "recall@10": 0.48236431191993695,
       "recall@5": 0.35097111400941
     },
+    "dual_space_complementary": {
+      "auc": 0.9006115121057081,
+      "evaluated_targets": 1126.0,
+      "map@10": 0.35957473637274134,
+      "map@5": 0.3373097986974541,
+      "ndcg@10": 0.48227736654871983,
+      "ndcg@5": 0.42758412071999596,
+      "precision@10": 0.19209591474245116,
+      "precision@5": 0.25808170515097695,
+      "recall@10": 0.6283184149855932,
+      "recall@5": 0.4518183519438951
+    },
     "popularity_degree": {
       "auc": 0.7849972805444776,
       "evaluated_targets": 1126.0,
@@ -74,7 +118,7 @@
       "recall@5": 0.20294446098961078
     },
     "proposal_hybrid": {
-      "auc": 0.8319817755752166,
+      "auc": 0.8319817720842597,
       "evaluated_targets": 1126.0,
       "map@10": 0.26044086536331523,
       "map@5": 0.24454213538582986,
@@ -122,7 +166,7 @@
       "recall@5": 0.26469383956171694
     },
     "teammate_learned_ranker": {
-      "auc": 0.880673311354268,
+      "auc": 0.8806732950631352,
       "evaluated_targets": 1126.0,
       "map@10": 0.32885511358678066,
       "map@5": 0.30706853167554765,

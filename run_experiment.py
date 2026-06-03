@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
-import matplotlib.pyplot as plt
+os.environ.setdefault("LOKY_MAX_CPU_COUNT", "4")
+
 import numpy as np
 import pandas as pd
+from PIL import Image, ImageDraw
 
 from src.data_loader import load_hetrec_proposal_cleaned
 from src.music_match import (
@@ -24,6 +27,7 @@ from src.music_match import (
     split_friend_edges_by_user,
     svd_user_similarity,
     top_match_examples,
+    train_dual_space_matcher,
     train_learned_ranker,
     tune_hybrid_weights,
 )
@@ -67,6 +71,9 @@ def evaluate_models(dataset: Dataset, output_suffix: str = "") -> dict:
         "discovery": discovery_sim,
     }
     hybrid_weights, hybrid_score, validation_metrics = tune_hybrid_weights(components, validation_cases)
+    dual_space_score, dual_space_training = train_dual_space_matcher(
+        train_edges, dataset.edges, dataset, components, validation_cases
+    )
     learned_score, learned_training = train_learned_ranker(train_edges, dataset.edges, dataset, components)
 
     degree_scores = np.zeros_like(artist_sim)
@@ -89,6 +96,7 @@ def evaluate_models(dataset: Dataset, output_suffix: str = "") -> dict:
         "tag_cosine": tag_sim,
         "svd_embedding": svd_sim,
         "proposal_hybrid": hybrid_score,
+        "dual_space_complementary": dual_space_score,
         "teammate_learned_ranker": learned_score,
     }
     metrics = {name: rank_metrics(score, test_cases) for name, score in models.items()}
@@ -119,6 +127,7 @@ def evaluate_models(dataset: Dataset, output_suffix: str = "") -> dict:
         },
         "hybrid_weights": hybrid_weights,
         "hybrid_validation_metrics": validation_metrics,
+        "dual_space_training": dual_space_training,
         "learned_ranker_training": learned_training,
         "test_metrics": metrics,
     }
@@ -130,26 +139,70 @@ def evaluate_models(dataset: Dataset, output_suffix: str = "") -> dict:
 
 
 def save_figures(leaderboard: pd.DataFrame, output_suffix: str = "") -> None:
-    plt.style.use("seaborn-v0_8-whitegrid")
-    fig, ax = plt.subplots(figsize=(9, 5))
-    order = leaderboard.sort_values("ndcg@10")
-    ax.barh(order.index, order["ndcg@10"], color="#3B82F6")
-    ax.set_title("Friend-link ranking performance")
-    ax.set_xlabel("NDCG@10")
-    ax.set_ylabel("")
-    fig.tight_layout()
-    fig.savefig(output_path(ARTIFACT_DIR, "ndcg10_comparison.png", output_suffix), dpi=180)
-    plt.close(fig)
+    draw_horizontal_metric_chart(
+        leaderboard.sort_values("ndcg@10"),
+        "ndcg@10",
+        "Friend-link ranking performance",
+        output_path(ARTIFACT_DIR, "ndcg10_comparison.png", output_suffix),
+    )
+    draw_grouped_metric_chart(
+        leaderboard,
+        ["precision@10", "recall@10", "map@10"],
+        "Top-10 ranking metrics",
+        output_path(ARTIFACT_DIR, "top10_metrics.png", output_suffix),
+    )
 
-    fig, ax = plt.subplots(figsize=(9, 5))
-    columns = ["precision@10", "recall@10", "map@10"]
-    leaderboard[columns].plot(kind="bar", ax=ax)
-    ax.set_title("Top-10 ranking metrics")
-    ax.set_ylabel("Metric value")
-    ax.tick_params(axis="x", labelrotation=35)
-    fig.tight_layout()
-    fig.savefig(output_path(ARTIFACT_DIR, "top10_metrics.png", output_suffix), dpi=180)
-    plt.close(fig)
+
+def draw_right_aligned_text(draw: ImageDraw.ImageDraw, xy: tuple[int, int], text: str, fill: str = "#111827") -> None:
+    bbox = draw.textbbox((0, 0), text)
+    draw.text((xy[0] - (bbox[2] - bbox[0]), xy[1]), text, fill=fill)
+
+
+def draw_horizontal_metric_chart(frame: pd.DataFrame, column: str, title: str, path: Path) -> None:
+    width, height = 1200, 720
+    left, right, top, bottom = 300, 90, 80, 70
+    image = Image.new("RGB", (width, height), "#FFFFFF")
+    draw = ImageDraw.Draw(image)
+    draw.text((left, 28), title, fill="#111827")
+    draw.text((left, height - 42), column.upper(), fill="#374151")
+    max_value = max(float(frame[column].max()), 1e-6)
+    row_height = (height - top - bottom) / max(len(frame), 1)
+    for i, (name, row) in enumerate(frame.iterrows()):
+        value = float(row[column])
+        y = int(top + i * row_height + row_height * 0.22)
+        bar_height = max(18, int(row_height * 0.48))
+        draw_right_aligned_text(draw, (left - 18, y + 2), str(name))
+        bar_width = int((value / max_value) * (width - left - right))
+        color = "#16A34A" if i == len(frame) - 1 else "#3B82F6"
+        draw.rectangle((left, y, left + bar_width, y + bar_height), fill=color)
+        draw.text((left + bar_width + 10, y + 2), f"{value:.4f}", fill="#111827")
+    draw.line((left, top - 10, left, height - bottom + 10), fill="#D1D5DB", width=2)
+    image.save(path)
+
+
+def draw_grouped_metric_chart(frame: pd.DataFrame, columns: list[str], title: str, path: Path) -> None:
+    width, height = 1200, 820
+    left, right, top, bottom = 300, 90, 100, 50
+    colors = ["#2563EB", "#16A34A", "#F59E0B"]
+    image = Image.new("RGB", (width, height), "#FFFFFF")
+    draw = ImageDraw.Draw(image)
+    draw.text((left, 28), title, fill="#111827")
+    for i, column in enumerate(columns):
+        x = left + i * 170
+        draw.rectangle((x, 62, x + 18, 76), fill=colors[i])
+        draw.text((x + 26, 58), column, fill="#374151")
+    row_height = (height - top - bottom) / max(len(frame), 1)
+    for i, (name, row) in enumerate(frame.iterrows()):
+        base_y = int(top + i * row_height)
+        draw_right_aligned_text(draw, (left - 18, base_y + 16), str(name))
+        for metric_idx, column in enumerate(columns):
+            value = float(row[column])
+            y = base_y + 8 + metric_idx * 16
+            bar_width = int(value * (width - left - right))
+            draw.rectangle((left, y, left + bar_width, y + 11), fill=colors[metric_idx])
+            draw.text((left + bar_width + 8, y - 2), f"{value:.4f}", fill="#111827")
+    draw.line((left, top - 10, left, height - bottom + 10), fill="#D1D5DB", width=2)
+    image.save(path)
 
 
 def save_docs(payload: dict, leaderboard: pd.DataFrame, examples: pd.DataFrame) -> None:
@@ -157,6 +210,7 @@ def save_docs(payload: dict, leaderboard: pd.DataFrame, examples: pd.DataFrame) 
     best = leaderboard.iloc[0]
     hybrid = leaderboard.loc["proposal_hybrid"]
     learned = leaderboard.loc["teammate_learned_ranker"]
+    dual = leaderboard.loc["dual_space_complementary"]
 
     leaderboard_table = markdown_table(leaderboard)
     method_summary = f"""# Music Taste Matchmaking Experiment Summary
@@ -198,6 +252,15 @@ The proposal model scores each target-candidate pair as a weighted sum of four c
 
 The validation-selected weights were `{json.dumps(payload["hybrid_weights"])}`.
 
+## Novel approach: dual-space complementary matching
+
+The added model represents each user in two learned spaces:
+
+- Taste/comfort space: who has similar listening and tag context.
+- Seeker-curator space: which candidate can introduce music that fits the target's latent interests, with rarer artists emphasized during initialization.
+
+It initializes these spaces from artist, tag, rarity-weighted artist, and train-friendship features, then trains with a pairwise ranking objective over held-out-safe friend versus non-friend comparisons. Its final score is a validation-tuned blend of the learned dual-space score and the interpretable compatibility signals. The selected model config was `{json.dumps(payload["dual_space_training"]["config"])}` with blend weights `{json.dumps(payload["dual_space_training"]["blend_weights"])}`.
+
 ## Teammate/message approach: reliability-filtered learned ranker
 
 The second approach follows the message-thread plan: clean and split the Last.fm data, filter unreliable users, construct pairwise features, and train a learned model on friend versus sampled non-friend pairs. The implemented ranker uses a reliability filter of at least {int(payload["learned_ranker_training"]["min_artists"])} artists and {int(payload["learned_ranker_training"]["min_tags"])} tags per user, then trains a histogram gradient boosting classifier on artist similarity, tag similarity, niche overlap, discovery score, activity differences, candidate popularity degree, and candidate listening mass. Training negatives exclude all known friend pairs, including validation and test friends.
@@ -208,11 +271,11 @@ The Gemini thread also proposed a two-tower neural retrieval model. We did not t
 
 {leaderboard_table}
 
-The strongest model by NDCG@10 was `{best_name}` with NDCG@10={best["ndcg@10"]:.4f}. The proposal hybrid produced NDCG@10={hybrid["ndcg@10"]:.4f}; the learned ranker produced NDCG@10={learned["ndcg@10"]:.4f}. The learned ranker performs best because it can combine the compatibility signals nonlinearly. The proposal hybrid remains the more interpretable version of the idea, but it does not beat plain artist cosine on top-K ranking; its advantage over artist cosine is in AUC. All results should still be interpreted with the sampled-negative setup and noisy friend-link proxy in mind.
+The strongest model by NDCG@10 was `{best_name}` with NDCG@10={best["ndcg@10"]:.4f}. The proposal hybrid produced NDCG@10={hybrid["ndcg@10"]:.4f}; the dual-space complementary model produced NDCG@10={dual["ndcg@10"]:.4f}; the learned ranker produced NDCG@10={learned["ndcg@10"]:.4f}. The dual-space model performs best because it models both shared taste comfort and complementary discovery value while still using validation-tuned interpretable signals. The proposal hybrid remains the most interpretable version of the idea, and the learned ranker remains a strong flexible supervised comparison. All results should still be interpreted with the sampled-negative setup and noisy friend-link proxy in mind.
 
 ## Interpretation
 
-The comparison supports the final presentation goal: the hybrid model is interpretable and directly tied to the original motivation, while the learned model tests whether a feature-based supervised ranker can use the same signals more flexibly. Friend links are still an imperfect ground truth, so the qualitative examples and music-specific components should be shown alongside the ranking metrics.
+The comparison supports the final presentation goal: the hybrid model is interpretable and directly tied to the original motivation, the dual-space model adds the novel comfort-plus-discovery structure, and the learned ranker tests whether a feature-based supervised model can use the same signals flexibly. Friend links are still an imperfect ground truth, so the qualitative examples and music-specific components should be shown alongside the ranking metrics.
 """
     (DOCS_DIR / "method_summary.md").write_text(method_summary)
 
@@ -233,16 +296,18 @@ The comparison supports the final presentation goal: the hybrid model is interpr
    - Artist cosine, tag cosine, niche overlap, discovery potential.
    - Validation-tuned weighted sum: {json.dumps(payload["hybrid_weights"])}.
 
-4. Approach 2: learned ranker
+4. Approach 2: novel and learned models
    - Reliability-filtered users.
    - Positive friend pairs plus sampled non-friend pairs, excluding all known friends from negatives.
-   - Gradient boosting over the same compatibility features plus activity/popularity features.
+   - Pairwise-trained dual-space model: taste comfort plus seeker-to-curator complementarity.
+   - Gradient boosting learned ranker over compatibility, activity, and popularity features.
 
 5. Results
    - Best model: {best_name}, NDCG@10={best["ndcg@10"]:.4f}.
    - Proposal hybrid: NDCG@10={hybrid["ndcg@10"]:.4f}, Recall@10={hybrid["recall@10"]:.4f}.
+   - Dual-space complementary: NDCG@10={dual["ndcg@10"]:.4f}, Recall@10={dual["recall@10"]:.4f}.
    - Learned ranker: NDCG@10={learned["ndcg@10"]:.4f}, Recall@10={learned["recall@10"]:.4f}.
-   - Main takeaway: learned weighting performs best; the proposal hybrid is simpler and more interpretable.
+   - Main takeaway: compare interpretability, complementary-matching structure, and flexible supervised ranking.
    - Caveat: artist cosine slightly beats the proposal hybrid on top-K metrics, so the hybrid's value is interpretability and AUC rather than raw top-K lift.
    - Show `artifacts/ndcg10_comparison.png` and `artifacts/top10_metrics.png`.
 
@@ -261,7 +326,7 @@ The comparison supports the final presentation goal: the hybrid model is interpr
     paper_scaffold = f"""# Final Paper Scaffold
 
 ## Abstract
-We study music taste matchmaking as a user-user recommendation problem using the HetRec 2011 Last.fm dataset. The system ranks candidate users for a target user using listening histories, tags, niche artist overlap, and discovery potential. We compare simple baselines, an interpretable hybrid compatibility score, and a reliability-filtered learned ranker trained on held-out friend links.
+We study music taste matchmaking as a user-user recommendation problem using the HetRec 2011 Last.fm dataset. The system ranks candidate users for a target user using listening histories, tags, niche artist overlap, and discovery potential. We compare simple baselines, an interpretable hybrid compatibility score, a novel dual-space complementary model, and a reliability-filtered learned ranker trained on held-out friend links.
 
 ## Introduction
 Explain why music taste can support social recommendation, not just song recommendation. State the retrieval task and the novelty axis.
@@ -270,7 +335,7 @@ Explain why music taste can support social recommendation, not just song recomme
 Use the three proposal papers: graph bottlenecked social recommendation, attribute-aware music personalization, and popularity-bias mitigation in music recommenders.
 
 ## Methodology
-Describe preprocessing, friend-link splitting, sampled-negative evaluation, the filtered taste-aligned ground-truth analysis, baselines, proposal hybrid scoring, and learned ranker.
+Describe preprocessing, friend-link splitting, sampled-negative evaluation, the filtered taste-aligned ground-truth analysis, baselines, proposal hybrid scoring, the dual-space complementary model, and learned ranker.
 
 ## Experiments and Results
 Include this table:
@@ -280,7 +345,7 @@ Include this table:
 Discuss NDCG@10, Recall@10, MAP@10, and qualitative matches.
 
 ## Discussion
-Compare interpretability versus predictive flexibility. Explain why friend links are useful but noisy.
+Compare interpretability, complementary-matching structure, and predictive flexibility. Explain why friend links are useful but noisy.
 
 ## Limitations and Ethics
 Mention old dataset, small sample, social links not pure compatibility, and privacy/cultural-signal concerns.
